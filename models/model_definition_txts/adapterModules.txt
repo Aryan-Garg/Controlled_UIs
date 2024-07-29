@@ -1,0 +1,7 @@
+ModuleList(
+  (0-7): 8 x Linear(in_features=1024, out_features=320, bias=False)
+  (8-15): 8 x Linear(in_features=1024, out_features=640, bias=False)
+  (16-39): 24 x Linear(in_features=1024, out_features=1280, bias=False)
+  (40-51): 12 x Linear(in_features=1024, out_features=640, bias=False)
+  (52-63): 12 x Linear(in_features=1024, out_features=320, bias=False)
+)
