@@ -66,7 +66,7 @@ class FlowEncoder_MLP(nn.Module):
       return x
     
 
-class FlowProjModel(nn.Module):
+class FlowEncoder(nn.Module):
     def __init__(self, cross_attention_dim, clip_embeddings_dim, clip_extra_context_tokens, 
                  eyeFormer, flow_latenizer):
         super().__init__()
@@ -79,18 +79,45 @@ class FlowProjModel(nn.Module):
     def forward(self, images):
         if self.eyeFormer is not None:
             flow_embeds = self.eyeFormer(images)
-        # TODO: Need to figure out shapes and fix here!!!!
-        flow_embeds = self.flow_latenizer(images)
+        else:
+            flow_embeds = images
+        
+        flow_embeds = flow_embeds.view(flow_embeds.size(0), -1)
+        flow_embeds = self.flow_latenizer(flow_embeds)
+        # print("Final flow_embeds Shape: ", flow_embeds.shape)
         return flow_embeds
+
+
+class CorrectProjModel(torch.nn.Module):
+    """
+    Correct the final flow embedding wiht a linear norm and final projection layer
+    """
+
+    def __init__(self, cross_attention_dim=1024, clip_embeddings_dim=1024, clip_extra_context_tokens=4):
+        super().__init__()
+
+        self.generator = None
+        self.cross_attention_dim = cross_attention_dim
+        self.clip_extra_context_tokens = clip_extra_context_tokens
+        self.proj = torch.nn.Linear(clip_embeddings_dim, self.clip_extra_context_tokens * cross_attention_dim)
+        self.norm = torch.nn.LayerNorm(cross_attention_dim)
+
+    def forward(self, image_embeds):
+        embeds = image_embeds
+        clip_extra_context_tokens = self.proj(embeds).reshape(
+            -1, self.clip_extra_context_tokens, self.cross_attention_dim
+        )
+        clip_extra_context_tokens = self.norm(clip_extra_context_tokens)
+        return clip_extra_context_tokens
 
 #########################################################################
 
 # Dataset
 class MyDataset(torch.utils.data.Dataset):
 
-    def __init__(self, json_file, tokenizer, size=512, 
+    def __init__(self, json_file, tokenizer, size=256, 
                  t_drop_rate=0.05, i_drop_rate=0.05, 
-                 ti_drop_rate=0.05, image_root_path="", dataset_name="ueyes"):
+                 ti_drop_rate=0.05, dataset_name="ueyes"):
         super().__init__()
 
         self.tokenizer = tokenizer
@@ -98,7 +125,6 @@ class MyDataset(torch.utils.data.Dataset):
         self.i_drop_rate = i_drop_rate
         self.t_drop_rate = t_drop_rate
         self.ti_drop_rate = ti_drop_rate
-        self.image_root_path = image_root_path
         self.dataset_name = dataset_name
 
         self.data = json.load(open(json_file)) # list of dict: [{"image_file": "1.png", "text": "A dog"}]
@@ -164,13 +190,13 @@ class MyDataset(torch.utils.data.Dataset):
 def collate_fn(data):
     images = torch.stack([example["image"] for example in data])
     text_input_ids = torch.cat([example["text_input_ids"] for example in data], dim=0)
-    clip_images = torch.cat([example["clip_image"] for example in data], dim=0)
+    # clip_images = torch.cat([example["clip_image"] for example in data], dim=0)
     drop_flow_embeds = [example["drop_flow_embed"] for example in data]
 
     return {
         "images": images,
         "text_input_ids": text_input_ids,
-        "clip_images": clip_images,
+        # "clip_images": clip_images,
         "drop_flow_embeds": drop_flow_embeds
     }
     
@@ -187,7 +213,11 @@ class IPAdapter(torch.nn.Module):
             self.load_from_checkpoint(ckpt_path)
 
     def forward(self, noisy_latents, timesteps, encoder_hidden_states, flow_embeds):
+        print("flow_embeds shape: ", flow_embeds.shape)
+        print("encoder_hidden_states shape: ", encoder_hidden_states.shape)
         ip_tokens = self.image_proj_model(flow_embeds)
+        print("ip_tokens shape: ", ip_tokens.shape)
+        
         encoder_hidden_states = torch.cat([encoder_hidden_states, ip_tokens], dim=1)
         # Predict the noise residual
         noise_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
@@ -270,7 +300,7 @@ def parse_args():
     parser.add_argument(
         "--resolution",
         type=int,
-        default=512,
+        default=256,
         help=(
             "The resolution for input images"
         ),
@@ -379,7 +409,6 @@ def main():
         state_dict = checkpointEF['model']
 
         eyeFormer.load_state_dict(state_dict)
-        print('load checkpoint from %s' % args.checkpoint)
         eyeFormer.requires_grad_(False)
         
 
@@ -442,29 +471,39 @@ def main():
     if eyeFormer is not None:
         eyeFormer.to(accelerator.device, dtype=weight_dtype)
     
-    flow_proj_model = FlowProjModel(
+    flow_encoder = FlowEncoder(
         cross_attention_dim=unet.config.cross_attention_dim,
         clip_embeddings_dim=1024,
         clip_extra_context_tokens=4,
         eyeFormer=eyeFormer,
         flow_latenizer=flow_latenizer
     )
-    ip_adapter = IPAdapter(unet, flow_proj_model, adapter_modules, args.pretrained_ip_adapter_path)
+    flow_projection_model = CorrectProjModel(
+            cross_attention_dim=unet.config.cross_attention_dim,
+            clip_embeddings_dim=1024,
+            clip_extra_context_tokens=4
+    )
+    ip_adapter = IPAdapter(unet, flow_projection_model, adapter_modules, args.pretrained_ip_adapter_path)
     
     # optimizer
     if args.dataset_name == "ueyes":
-        params_to_opt = itertools.chain(ip_adapter.image_proj_model.parameters(),  
-                                        ip_adapter.adapter_modules.parameters())
+        params_to_opt = itertools.chain(
+            flow_projection_model.parameters(),
+            ip_adapter.image_proj_model.parameters(),  
+            ip_adapter.adapter_modules.parameters())
     else:
-        params_to_opt = itertools.chain(flow_latenizer.parameters(), 
+        params_to_opt = itertools.chain(flow_latenizer.parameters(),
+                                        flow_projection_model.parameters(), 
                                     ip_adapter.image_proj_model.parameters(),  
                                     ip_adapter.adapter_modules.parameters())
         
     optimizer = torch.optim.AdamW(params_to_opt, lr=args.learning_rate, weight_decay=args.weight_decay)
     
     # dataloader
-    train_dataset = MyDataset(args.data_json_file, tokenizer=tokenizer, size=args.resolution, 
-                              image_root_path=args.data_root_path, dataset_name=args.dataset_name)
+    train_dataset = MyDataset(args.data_json_file, 
+                              tokenizer=tokenizer, 
+                              size=args.resolution, 
+                              dataset_name=args.dataset_name)
     
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
@@ -500,7 +539,7 @@ def main():
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
             
                 with torch.no_grad():
-                    flow_embeds = flow_proj_model(batch["images"].to(accelerator.device, dtype=weight_dtype)) 
+                    flow_embeds = flowEncoder(batch["images"].to(accelerator.device, dtype=weight_dtype)) 
                 flow_embeds_ = []
                 for image_embed, drop_flow_embed in zip(flow_embeds, batch["drop_flow_embeds"]):
                     if drop_flow_embed == 1:
