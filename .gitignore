@@ -6,7 +6,7 @@ lightning_logs/
 image_log/
 test_imgs/
 models/PathGANpp_weights/
-
+IPAdapter/sd-flow_adapter/
 *.pth
 *.pt
 *.ckpt
