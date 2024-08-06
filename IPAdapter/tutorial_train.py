@@ -213,10 +213,10 @@ class IPAdapter(torch.nn.Module):
             self.load_from_checkpoint(ckpt_path)
 
     def forward(self, noisy_latents, timesteps, encoder_hidden_states, flow_embeds):
-        print("flow_embeds shape: ", flow_embeds.shape)
-        print("encoder_hidden_states shape: ", encoder_hidden_states.shape)
+        # print("flow_embeds shape: ", flow_embeds.shape)
+        # print("encoder_hidden_states shape: ", encoder_hidden_states.shape)
         ip_tokens = self.correct_proj_model(flow_embeds)
-        print("ip_tokens shape: ", ip_tokens.shape)
+        # print("ip_tokens shape: ", ip_tokens.shape)
         
         encoder_hidden_states = torch.cat([encoder_hidden_states, ip_tokens], dim=1)
         # Predict the noise residual
