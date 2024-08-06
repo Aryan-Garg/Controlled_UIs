@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 import itertools
 import time
-import ruamel_yaml as yaml
+import ruamel.yaml as yaml
 
 import torch
 import torch.nn as nn
@@ -221,7 +221,6 @@ def parse_args():
         "--pretrained_model_name_or_path",
         type=str,
         default="runwayml/stable-diffusion-v1-5",
-        required=True,
         help="Path to pretrained model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
@@ -234,18 +233,17 @@ def parse_args():
         "--data_json_file",
         type=str,
         default="/home/researcher/Documents/dataset/original_datasets/webui_prompts.json",
-        required=True,
         help="Training data",
     )
 
-    # Isn't the json file enough?
-    parser.add_argument(
-        "--data_root_path",
-        type=str,
-        default="",
-        required=True,
-        help="Training data root path",
-    )
+    # Isn't the json file enough? NOPE not any more
+    # parser.add_argument(
+    #     "--data_root_path",
+    #     type=str,
+    #     default="",
+    #     required=True,
+    #     help="Training data root path",
+    # )
     # False for Flow-Adapter
     parser.add_argument(
         "--image_encoder_path",
@@ -327,7 +325,7 @@ def parse_args():
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     
     # Added for flow-Adapter
-    parser.add_argument("--dataset_name", type=str, default="ueyes", 
+    parser.add_argument("--dataset_name", type=str, default="everything_else", 
                         help="The name of the dataset to use. [ueyes | everything_else]")
 
     args = parser.parse_args()
@@ -371,12 +369,12 @@ def main():
     else: 
         flow_latenizer.requires_grad_(True)
         # NOTE: x -> x = eyeFormer(x) -> flowEncoder(x) -> IP-Adapter pipeline 
-        config = yaml.load(open("./models_eyeformer/Tracking.yaml", 'r'), Loader=yaml.Loader)
+        config = yaml.load(open("./configs/Tracking.yaml", 'r'), Loader=yaml.Loader)
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
         yaml.dump(config, open(os.path.join(args.output_dir, 'config.yaml'), 'w'))
 
         eyeFormer = TrackingTransformer(config = config, init_deit=False)
-        checkpointEF = torch.load("/home/researcher/Documents/aryan/flowEncoder/weights/checkpoint_19.pth",
+        checkpointEF = torch.load("/home/researcher/Documents/aryan/asciProject/flowEncoder/weights/checkpoint_19.pth",
                                 map_location='cpu')
         state_dict = checkpointEF['model']
 
