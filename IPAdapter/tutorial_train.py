@@ -203,10 +203,10 @@ def collate_fn(data):
 
 class IPAdapter(torch.nn.Module):
     """IP-Adapter"""
-    def __init__(self, unet, image_proj_model, adapter_modules, ckpt_path=None):
+    def __init__(self, unet, correct_proj_model, adapter_modules, ckpt_path=None):
         super().__init__()
         self.unet = unet
-        self.image_proj_model = image_proj_model
+        self.correct_proj_model = correct_proj_model
         self.adapter_modules = adapter_modules
 
         if ckpt_path is not None:
@@ -215,7 +215,7 @@ class IPAdapter(torch.nn.Module):
     def forward(self, noisy_latents, timesteps, encoder_hidden_states, flow_embeds):
         print("flow_embeds shape: ", flow_embeds.shape)
         print("encoder_hidden_states shape: ", encoder_hidden_states.shape)
-        ip_tokens = self.image_proj_model(flow_embeds)
+        ip_tokens = self.correct_proj_model(flow_embeds)
         print("ip_tokens shape: ", ip_tokens.shape)
         
         encoder_hidden_states = torch.cat([encoder_hidden_states, ip_tokens], dim=1)
@@ -225,21 +225,21 @@ class IPAdapter(torch.nn.Module):
 
     def load_from_checkpoint(self, ckpt_path: str):
         # Calculate original checksums
-        orig_ip_proj_sum = torch.sum(torch.stack([torch.sum(p) for p in self.image_proj_model.parameters()]))
+        orig_ip_proj_sum = torch.sum(torch.stack([torch.sum(p) for p in self.correct_proj_model.parameters()]))
         orig_adapter_sum = torch.sum(torch.stack([torch.sum(p) for p in self.adapter_modules.parameters()]))
 
         state_dict = torch.load(ckpt_path, map_location="cpu")
 
-        # Load state dict for image_proj_model and adapter_modules
-        self.image_proj_model.load_state_dict(state_dict["image_proj"], strict=True)
+        # Load state dict for correct_proj_model and adapter_modules
+        self.correct_proj_model.load_state_dict(state_dict["image_proj"], strict=True)
         self.adapter_modules.load_state_dict(state_dict["ip_adapter"], strict=True)
 
         # Calculate new checksums
-        new_ip_proj_sum = torch.sum(torch.stack([torch.sum(p) for p in self.image_proj_model.parameters()]))
+        new_ip_proj_sum = torch.sum(torch.stack([torch.sum(p) for p in self.correct_proj_model.parameters()]))
         new_adapter_sum = torch.sum(torch.stack([torch.sum(p) for p in self.adapter_modules.parameters()]))
 
         # Verify if the weights have changed
-        assert orig_ip_proj_sum != new_ip_proj_sum, "Weights of image_proj_model did not change!"
+        assert orig_ip_proj_sum != new_ip_proj_sum, "Weights of correct_proj_model did not change!"
         assert orig_adapter_sum != new_adapter_sum, "Weights of adapter_modules did not change!"
 
         print(f"Successfully loaded weights from checkpoint {ckpt_path}")
@@ -418,7 +418,7 @@ def main():
     text_encoder.requires_grad_(False)
 
     #ip-adapter
-    # image_proj_model = ImageProjModel(
+    # correct_proj_model = ImageProjModel(
     #     cross_attention_dim=unet.config.cross_attention_dim,
     #     clip_embeddings_dim=1024,
     #     clip_extra_context_tokens=4,
@@ -488,14 +488,12 @@ def main():
     # optimizer
     if args.dataset_name == "ueyes":
         params_to_opt = itertools.chain(
-            flow_projection_model.parameters(),
-            ip_adapter.image_proj_model.parameters(),  
+            ip_adapter.correct_proj_model.parameters(),  
             ip_adapter.adapter_modules.parameters())
     else:
         params_to_opt = itertools.chain(flow_latenizer.parameters(),
-                                        flow_projection_model.parameters(), 
-                                    ip_adapter.image_proj_model.parameters(),  
-                                    ip_adapter.adapter_modules.parameters())
+                                        ip_adapter.correct_proj_model.parameters(),  
+                                        ip_adapter.adapter_modules.parameters())
         
     optimizer = torch.optim.AdamW(params_to_opt, lr=args.learning_rate, weight_decay=args.weight_decay)
     
@@ -539,7 +537,7 @@ def main():
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
             
                 with torch.no_grad():
-                    flow_embeds = flowEncoder(batch["images"].to(accelerator.device, dtype=weight_dtype)) 
+                    flow_embeds = flow_encoder(batch["images"].to(accelerator.device, dtype=weight_dtype)) 
                 flow_embeds_ = []
                 for image_embed, drop_flow_embed in zip(flow_embeds, batch["drop_flow_embeds"]):
                     if drop_flow_embed == 1:
@@ -556,7 +554,7 @@ def main():
                 loss_noise = F.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
                 # TODO: loss_flow 
                 # Need to sample an image from the diffusion process and then calculate the loss
-                sampled_image = noise_scheduler.sample_image(noisy_latents, timesteps) # TODO: Check if this is correct!
+                # sampled_image = noise_scheduler.sample_image(noisy_latents, timesteps) # TODO: Check if this is correct!
                 
                 # loss_flow = get_soft_dtw_Loss(flow_proj_model.eyeFormer(sampled_image), batch["flow_input"])
                 loss_flow = 0.
