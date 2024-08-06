@@ -173,6 +173,7 @@ class IPAttnProcessor(nn.Module):
         ip_hidden_states = torch.bmm(ip_attention_probs, ip_value)
         ip_hidden_states = attn.batch_to_head_dim(ip_hidden_states)
 
+        # How to make self.scale adaptive to the iteration number?
         hidden_states = hidden_states + self.scale * ip_hidden_states
 
         # linear proj
