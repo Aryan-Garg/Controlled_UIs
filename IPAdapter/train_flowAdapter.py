@@ -74,8 +74,8 @@ class FlowEncoder(nn.Module):
         self.clip_extra_context_tokens = clip_extra_context_tokens
         self.flow_latenizer = flow_latenizer
     
-    def forward(self, images):
-        flow_embeds = flow_embeds.view(flow_embeds.size(0), -1)
+    def forward(self, x):
+        flow_embeds = x.view(x.size(0), -1)
         flow_embeds = self.flow_latenizer(flow_embeds)
         # print("Final flow_embeds Shape: ", flow_embeds.shape)
         return flow_embeds
@@ -535,7 +535,7 @@ def main():
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
                 if args.dataset_name == "everything_else":
-                    with torch.no_grad:
+                    with torch.no_grad():
                         flow_path = eyeFormer(batch["images"].to(accelerator.device, dtype=weight_dtype))
                 else: 
                     # flow_path = batch["flow"]
