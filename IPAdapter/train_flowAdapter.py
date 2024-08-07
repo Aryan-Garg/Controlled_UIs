@@ -81,7 +81,7 @@ class FlowEncoder(nn.Module):
         return flow_embeds
 
 
-class CorrectProjModel(torch.nn.Module):
+class CorrectProjModel(nn.Module):
     """
     Correct the final flow embedding wiht a linear norm and final projection layer
     """
@@ -476,6 +476,7 @@ def main():
             clip_embeddings_dim=1024,
             clip_extra_context_tokens=4
     )
+    flow_projection_model.requires_grad_(True)
     ip_adapter = IPAdapter(unet, flow_projection_model, adapter_modules, args.pretrained_ip_adapter_path)
     
     # optimizer
@@ -512,7 +513,6 @@ def main():
     
     global_step = 0
 
-    print("ip.rg:", ip_adapter.requires_grad, "flow_enc.rg:", flow_encoder.requires_grad, "\n\n")
     for epoch in range(0, args.num_train_epochs):
         begin = time.perf_counter()
         for step, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
