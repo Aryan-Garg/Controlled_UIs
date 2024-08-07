@@ -29,7 +29,7 @@ else:
 
 from models_eyeformer.model_tracking import TrackingTransformer
 from pytorchSoftdtwCuda.soft_dtw_cuda import SoftDTW
-
+from tqdm.auto import tqdm
 # Flow Adapter
 #########################################################################
 softLoss = SoftDTW(use_cuda=True, gamma=0.1)
@@ -312,7 +312,7 @@ def parse_args():
         help="Learning rate to use.",
     )
     parser.add_argument("--weight_decay", type=float, default=1e-2, help="Weight decay to use.")
-    parser.add_argument("--num_train_epochs", type=int, default=100)
+    parser.add_argument("--num_train_epochs", type=int, default=100) # TODO: Change this < 50
     parser.add_argument(
         "--train_batch_size", type=int, default=8, help="Batch size (per device) for the training dataloader."
     )
@@ -327,7 +327,7 @@ def parse_args():
     parser.add_argument(
         "--save_steps",
         type=int,
-        default=2000,
+        default=8000,
         help=(
             "Save a checkpoint of the training state every X updates"
         ),
@@ -517,7 +517,7 @@ def main():
     global_step = 0
     for epoch in range(0, args.num_train_epochs):
         begin = time.perf_counter()
-        for step, batch in enumerate(train_dataloader):
+        for step, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
             load_data_time = time.perf_counter() - begin
             with accelerator.accumulate(ip_adapter):
                 # Convert images to latent space
@@ -569,7 +569,7 @@ def main():
                 optimizer.step()
                 optimizer.zero_grad()
 
-                if accelerator.is_main_process:
+                if (step+1) % 200 == 0 and accelerator.is_main_process:
                     print("Epoch {}, step {}, data_time: {}, time: {}, step_loss: {}".format(
                         epoch, step, load_data_time, time.perf_counter() - begin, avg_loss))
             
