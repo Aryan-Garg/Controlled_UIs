@@ -511,6 +511,8 @@ def main():
                                                                                 train_dataloader)
     
     global_step = 0
+
+    print("ip.rg:", ip_adapter.requires_grad, "flow_enc.rg:", flow_encoder.requires_grad, "\n\n")
     for epoch in range(0, args.num_train_epochs):
         begin = time.perf_counter()
         for step, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
