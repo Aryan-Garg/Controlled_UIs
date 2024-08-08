@@ -83,7 +83,7 @@ class FlowEncoder(nn.Module):
 
 class CorrectProjModel(nn.Module):
     """
-    Correct the final flow embedding wiht a linear norm and final projection layer
+    Correct the final flow embedding with a linear norm and final projection layer
     """
 
     def __init__(self, cross_attention_dim=1024, clip_embeddings_dim=1024, clip_extra_context_tokens=4):
@@ -103,7 +103,9 @@ class CorrectProjModel(nn.Module):
         clip_extra_context_tokens = self.norm(clip_extra_context_tokens)
         return clip_extra_context_tokens
 
+
 #########################################################################
+
 
 # Dataset
 class MyDataset(torch.utils.data.Dataset):
@@ -592,6 +594,7 @@ def main():
                 
             
             begin = time.perf_counter()
+      
                 
 if __name__ == "__main__":
     main()    
