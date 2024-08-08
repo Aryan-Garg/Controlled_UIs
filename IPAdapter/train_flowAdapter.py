@@ -581,7 +581,15 @@ def main():
             
             if global_step % args.save_steps == 0:
                 save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                accelerator.save_state(save_path)
+                accelerator.save_state(save_path, safe_serialization=False)
+                custom_model_save_dict = {
+                    "flow_proj": ip_adapter.correct_proj_model.state_dict(),
+                    "ip_adapter": ip_adapter.adapter_modules.state_dict(),
+                    "flow_encoder": flow_encoder.state_dict(),
+                }
+                torch.save(custom_model_save_dict, 
+                           os.path.join(args.output_dir, f"custom_model_checkpoint-{global_step}.pt"))
+                
             
             begin = time.perf_counter()
                 
