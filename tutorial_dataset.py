@@ -15,7 +15,7 @@ from transformers import CLIPImageProcessor
 class MyDataset(Dataset):
     def __init__(self):
         self.data = []
-        with open('./training/IOS/ios_prompts.json', 'rt') as f:
+        with open('/home/researcher/Documents/dataset/original_datasets/webui_prompts.json', 'rt') as f:
             self.data = json.load(f)
             # for line in f:
             #     self.data.append(json.loads(line))
@@ -25,45 +25,43 @@ class MyDataset(Dataset):
 
     def __getitem__(self, idx):
         
+        item = self.data[idx]
+        source_filename = item['source']
+        target_filename = item['target']
+        prompt = item['prompt']
+        # print(source_filename, target_filename, prompt[:10])
+        # TODO: Pre-process segmentation masks (Remove Text fields. Put in separate dir)
+        source = cv2.imread(source_filename, cv2.IMREAD_UNCHANGED)
+        target = cv2.imread(target_filename, cv2.IMREAD_UNCHANGED)
+        print("L>>>", source, source_filename)
+        print(source.shape)
+        # print("\nidx:", idx, "|", source.shape, target.shape, len(prompt))
+        # Do not forget that OpenCV read images in BGR order.
+        source = cv2.cvtColor(source, cv2.COLOR_BGR2RGB)
+        # target = cv2.cvtColor(target, cv2.COLOR_BGR2RGB)
+        # Resize images to 512x256
+        source = cv2.resize(source, (256, 512), interpolation=cv2.INTER_CUBIC)
+        target = cv2.resize(target, (256, 512), interpolation=cv2.INTER_CUBIC)
 
-        try:
-            item = self.data[idx]
-            source_filename = item['source']
-            target_filename = item['target']
-            prompt = item['prompt']
-            # TODO: Pre-process segmentation masks (Remove Text fields. Put in separate dir)
-            source = cv2.imread(source_filename, cv2.IMREAD_UNCHANGED)
-            target = cv2.imread(target_filename, cv2.IMREAD_UNCHANGED)
+        # except:
+        #     item = self.data[1]
+        #     source_filename = item['source']
+        #     target_filename = item['target']
+        #     prompt = item['prompt']
+        #     print(source_filename)
+        #     # TODO: Pre-process segmentation masks (Remove Text fields. Put in separate dir)
+        #     source = cv2.imread(source_filename, cv2.IMREAD_UNCHANGED)
+        #     target = cv2.imread(target_filename, cv2.IMREAD_UNCHANGED)
 
-            # print("\nidx:", idx, "|", source.shape, target.shape, len(prompt))
+        #     # print("\nidx:", idx, "|", source.shape, target.shape, len(prompt))
 
-            # Do not forget that OpenCV read images in BGR order.
-            source = cv2.cvtColor(source, cv2.COLOR_BGR2RGB)
-            # target = cv2.cvtColor(target, cv2.COLOR_BGR2RGB)
+        #     # Do not forget that OpenCV read images in BGR order.
+        #     source = cv2.cvtColor(source, cv2.COLOR_BGR2RGB)
+        #     # target = cv2.cvtColor(target, cv2.COLOR_BGR2RGB)
 
-            # Resize images to 512x256
-            source = cv2.resize(source, (256, 512), interpolation=cv2.INTER_CUBIC)
-            target = cv2.resize(target, (256, 512), interpolation=cv2.INTER_CUBIC)
-
-        except:
-            item = self.data[1]
-            source_filename = item['source']
-            target_filename = item['target']
-            prompt = item['prompt']
-            print(source_filename)
-            # TODO: Pre-process segmentation masks (Remove Text fields. Put in separate dir)
-            source = cv2.imread(source_filename, cv2.IMREAD_UNCHANGED)
-            target = cv2.imread(target_filename, cv2.IMREAD_UNCHANGED)
-
-            # print("\nidx:", idx, "|", source.shape, target.shape, len(prompt))
-
-            # Do not forget that OpenCV read images in BGR order.
-            source = cv2.cvtColor(source, cv2.COLOR_BGR2RGB)
-            # target = cv2.cvtColor(target, cv2.COLOR_BGR2RGB)
-
-            # Resize images to 512x256
-            source = cv2.resize(source, (256, 512), interpolation=cv2.INTER_CUBIC)
-            target = cv2.resize(target, (256, 512), interpolation=cv2.INTER_CUBIC)
+        #     # Resize images to 512x256
+        #     source = cv2.resize(source, (256, 512), interpolation=cv2.INTER_CUBIC)
+        #     target = cv2.resize(target, (256, 512), interpolation=cv2.INTER_CUBIC)
 
         # Normalize source images to [0, 1].
         source = source.astype(np.float32) / 255.0
