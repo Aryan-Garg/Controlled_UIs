@@ -485,7 +485,8 @@ class CNAttnProcessor:
 
 class CNAttnProcessor2_0:
     r"""
-    Processor for implementing scaled dot-product attention (enabled by default if you're using PyTorch 2.0).
+    Processor for implementing scaled dot-product attention 
+    (enabled by default if you're using PyTorch 2.0).
     """
 
     def __init__(self, num_tokens=4):
